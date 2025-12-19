@@ -6,6 +6,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Conexão com o banco SQLite
 const db = new sqlite3.Database('./database.db');
 
 // TABELA PEDIDOS
@@ -83,6 +84,7 @@ app.post('/produtos', (req, res) => {
     );
 });
 
+// Servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log("Backend rodando na porta " + PORT);
