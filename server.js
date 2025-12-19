@@ -8,6 +8,7 @@ app.use(express.json());
 
 const db = new sqlite3.Database('./database.db');
 
+// TABELA PEDIDOS
 db.run(`CREATE TABLE IF NOT EXISTS pedidos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     titulo TEXT,
@@ -15,6 +16,20 @@ db.run(`CREATE TABLE IF NOT EXISTS pedidos (
     status TEXT
 )`);
 
+// TABELA FORNECEDORES (SIMPLES)
+db.run(`CREATE TABLE IF NOT EXISTS fornecedores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT
+)`);
+
+// TABELA PRODUTOS (SIMPLES)
+db.run(`CREATE TABLE IF NOT EXISTS produtos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT,
+    fornecedorId INTEGER
+)`);
+
+// ROTAS PEDIDOS
 app.get('/pedidos', (req, res) => {
     db.all("SELECT * FROM pedidos", [], (err, rows) => {
         res.json(rows);
@@ -26,6 +41,42 @@ app.post('/pedidos', (req, res) => {
     db.run(
         "INSERT INTO pedidos (titulo, descricao, status) VALUES (?, ?, ?)",
         [titulo, descricao, status],
+        function () {
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+// ROTAS FORNECEDORES
+app.get('/fornecedores', (req, res) => {
+    db.all("SELECT * FROM fornecedores", [], (err, rows) => {
+        res.json(rows);
+    });
+});
+
+app.post('/fornecedores', (req, res) => {
+    const { nome } = req.body;
+    db.run(
+        "INSERT INTO fornecedores (nome) VALUES (?)",
+        [nome],
+        function () {
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+// ROTAS PRODUTOS
+app.get('/produtos', (req, res) => {
+    db.all("SELECT * FROM produtos", [], (err, rows) => {
+        res.json(rows);
+    });
+});
+
+app.post('/produtos', (req, res) => {
+    const { nome, fornecedorId } = req.body;
+    db.run(
+        "INSERT INTO produtos (nome, fornecedorId) VALUES (?, ?)",
+        [nome, fornecedorId],
         function () {
             res.json({ id: this.lastID });
         }
