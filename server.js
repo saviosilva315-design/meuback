@@ -50,4 +50,74 @@ app.get('/pedidos', (req, res) => {
 app.post('/pedidos', (req, res) => {
   const { titulo, descricao, status } = req.body;
   db.run(
-    'INSERT INTO pedidos*
+    'INSERT INTO pedidos (titulo, descricao, status) VALUES (?, ?, ?)',
+    [titulo, descricao, status],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID });
+    }
+  );
+});
+
+// DELETE pedido
+app.delete('/pedidos/:id', (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM pedidos WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ mensagem: 'Pedido excluído', id });
+  });
+});
+
+// Rotas de Fornecedores
+app.get('/fornecedores', (req, res) => {
+  db.all('SELECT * FROM fornecedores', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/fornecedores', (req, res) => {
+  const { nome } = req.body;
+  db.run(
+    'INSERT INTO fornecedores (nome) VALUES (?)',
+    [nome],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID });
+    }
+  );
+});
+
+// DELETE fornecedor
+app.delete('/fornecedores/:id', (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM fornecedores WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ mensagem: 'Fornecedor excluído', id });
+  });
+});
+
+// Rotas de Produtos
+app.get('/produtos', (req, res) => {
+  db.all('SELECT * FROM produtos', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/produtos', (req, res) => {
+  const { nome, fornecedorId } = req.body;
+  db.run(
+    'INSERT INTO produtos (nome, fornecedorId) VALUES (?, ?)',
+    [nome, fornecedorId],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ id: this.lastID });
+    }
+  );
+});
+
+// Servidor
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
