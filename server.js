@@ -39,7 +39,11 @@ db.serialize(() => {
   )`);
 });
 
-// Rotas de Pedidos
+// =======================================
+//               PEDIDOS
+// =======================================
+
+// GET todos pedidos
 app.get('/pedidos', (req, res) => {
   db.all('SELECT * FROM pedidos', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -47,6 +51,7 @@ app.get('/pedidos', (req, res) => {
   });
 });
 
+// POST pedido
 app.post('/pedidos', (req, res) => {
   const { titulo, descricao, status } = req.body;
   db.run(
@@ -68,7 +73,11 @@ app.delete('/pedidos/:id', (req, res) => {
   });
 });
 
-// Rotas de Fornecedores
+// =======================================
+//            FORNECEDORES
+// =======================================
+
+// GET todos fornecedores
 app.get('/fornecedores', (req, res) => {
   db.all('SELECT * FROM fornecedores', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -76,6 +85,7 @@ app.get('/fornecedores', (req, res) => {
   });
 });
 
+// POST fornecedor
 app.post('/fornecedores', (req, res) => {
   const { nome } = req.body;
   db.run(
@@ -97,7 +107,11 @@ app.delete('/fornecedores/:id', (req, res) => {
   });
 });
 
-// Rotas de Produtos
+// =======================================
+//               PRODUTOS
+// =======================================
+
+// GET todos os produtos
 app.get('/produtos', (req, res) => {
   db.all('SELECT * FROM produtos', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -105,6 +119,7 @@ app.get('/produtos', (req, res) => {
   });
 });
 
+// POST produto
 app.post('/produtos', (req, res) => {
   const { nome, fornecedorId } = req.body;
   db.run(
@@ -117,7 +132,19 @@ app.post('/produtos', (req, res) => {
   );
 });
 
-// Servidor
+// DELETE produto
+app.delete('/produtos/:id', (req, res) => {
+  const { id } = req.params;
+  db.run('DELETE FROM produtos WHERE id = ?', [id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ mensagem: 'Produto excluído', id });
+  });
+});
+
+// =======================================
+//              SERVIDOR
+// =======================================
+
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
