@@ -5,33 +5,39 @@ const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Conectar ao banco de dados SQLite
+// Conexão com o banco
 const db = new sqlite3.Database('./database.db', (err) => {
   if (err) {
     console.error('Erro ao conectar ao banco de dados:', err.message);
   } else {
-    console.log('Conectado ao banco de dados SQLite.');
+    console.log('Banco conectado.');
   }
 });
 
-// Criar tabelas se não existirem
+// Recriar tabelas
 db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS pedidos (
+
+  // Tabela de pedidos (agora com produtoId e fornecedorId)
+  db.run(`DROP TABLE IF EXISTS pedidos`);
+  db.run(`CREATE TABLE pedidos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     titulo TEXT,
     descricao TEXT,
-    status TEXT
+    status TEXT,
+    produtoId INTEGER,
+    fornecedorId INTEGER
   )`);
 
+  // Tabela fornecedores
   db.run(`CREATE TABLE IF NOT EXISTS fornecedores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT
   )`);
 
+  // Tabela produtos
   db.run(`CREATE TABLE IF NOT EXISTS produtos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT,
@@ -39,11 +45,10 @@ db.serialize(() => {
   )`);
 });
 
-// =======================================
-//               PEDIDOS
-// =======================================
 
-// GET todos pedidos
+// ====================== PEDIDOS ======================
+
+// GET pedidos
 app.get('/pedidos', (req, res) => {
   db.all('SELECT * FROM pedidos', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -51,12 +56,13 @@ app.get('/pedidos', (req, res) => {
   });
 });
 
-// POST pedido
+// POST pedidos (agora recebe produtoId e fornecedorId)
 app.post('/pedidos', (req, res) => {
-  const { titulo, descricao, status } = req.body;
+  const { titulo, descricao, status, produtoId, fornecedorId } = req.body;
+
   db.run(
-    'INSERT INTO pedidos (titulo, descricao, status) VALUES (?, ?, ?)',
-    [titulo, descricao, status],
+    'INSERT INTO pedidos (titulo, descricao, status, produtoId, fornecedorId) VALUES (?, ?, ?, ?, ?)',
+    [titulo, descricao, status, produtoId, fornecedorId],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ id: this.lastID });
@@ -64,20 +70,17 @@ app.post('/pedidos', (req, res) => {
   );
 });
 
-// DELETE pedido
+// DELETE pedidos
 app.delete('/pedidos/:id', (req, res) => {
-  const { id } = req.params;
-  db.run('DELETE FROM pedidos WHERE id = ?', [id], function (err) {
+  db.run('DELETE FROM pedidos WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ mensagem: 'Pedido excluído', id });
+    res.json({ mensagem: 'Pedido excluído', id: req.params.id });
   });
 });
 
-// =======================================
-//            FORNECEDORES
-// =======================================
 
-// GET todos fornecedores
+// ====================== FORNECEDORES ======================
+
 app.get('/fornecedores', (req, res) => {
   db.all('SELECT * FROM fornecedores', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -85,33 +88,23 @@ app.get('/fornecedores', (req, res) => {
   });
 });
 
-// POST fornecedor
 app.post('/fornecedores', (req, res) => {
-  const { nome } = req.body;
-  db.run(
-    'INSERT INTO fornecedores (nome) VALUES (?)',
-    [nome],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID });
-    }
-  );
-});
-
-// DELETE fornecedor
-app.delete('/fornecedores/:id', (req, res) => {
-  const { id } = req.params;
-  db.run('DELETE FROM fornecedores WHERE id = ?', [id], function (err) {
+  db.run('INSERT INTO fornecedores (nome) VALUES (?)', [req.body.nome], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ mensagem: 'Fornecedor excluído', id });
+    res.json({ id: this.lastID });
   });
 });
 
-// =======================================
-//               PRODUTOS
-// =======================================
+app.delete('/fornecedores/:id', (req, res) => {
+  db.run('DELETE FROM fornecedores WHERE id = ?', [req.params.id], function (err) {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ mensagem: 'Fornecedor excluído', id: req.params.id });
+  });
+});
 
-// GET todos os produtos
+
+// ====================== PRODUTOS ======================
+
 app.get('/produtos', (req, res) => {
   db.all('SELECT * FROM produtos', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -119,12 +112,10 @@ app.get('/produtos', (req, res) => {
   });
 });
 
-// POST produto
 app.post('/produtos', (req, res) => {
-  const { nome, fornecedorId } = req.body;
   db.run(
     'INSERT INTO produtos (nome, fornecedorId) VALUES (?, ?)',
-    [nome, fornecedorId],
+    [req.body.nome, req.body.fornecedorId],
     function (err) {
       if (err) return res.status(500).json({ error: err.message });
       res.json({ id: this.lastID });
@@ -132,18 +123,15 @@ app.post('/produtos', (req, res) => {
   );
 });
 
-// DELETE produto
 app.delete('/produtos/:id', (req, res) => {
-  const { id } = req.params;
-  db.run('DELETE FROM produtos WHERE id = ?', [id], function (err) {
+  db.run('DELETE FROM produtos WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ mensagem: 'Produto excluído', id });
+    res.json({ mensagem: 'Produto excluído', id: req.params.id });
   });
 });
 
-// =======================================
-//              SERVIDOR
-// =======================================
+
+// ====================== SERVIDOR ======================
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
