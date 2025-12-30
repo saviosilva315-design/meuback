@@ -1,119 +1,27 @@
-const supabase = require('../services/supabaseService');
+const cotacoesDB = require("../database/cotacoesDB");
 
-const produtoController = {
-  async getAllProdutos(req, res) {
-    try {
-      const { data, error } = await supabase
-        .from('produtos')
-        .select('*, fornecedores(nome)');
+// Recebe retorno da Digisac (respostas dos fornecedores)
+exports.receberMensagem = (req, res) => {
+    const { contactId, mensagem } = req.body;
 
-      if (error) throw error;
-      res.status(200).json(data);
-
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+    if (!contactId || !mensagem) {
+        return res.status(400).json({ erro: "Dados inválidos" });
     }
-  },
 
-  async getProdutoById(req, res) {
-    try {
-      const { id } = req.params;
+    // Identificar se essa resposta pertence a alguma cotação ativa
+    for (let cotacao of cotacoesDB.cotacoes) {
+        const fornecedor = cotacao.fornecedores.find(f => f.contactId === contactId);
 
-      const { data, error } = await supabase
-        .from('produtos')
-        .select('*, fornecedores(nome)')
-        .eq('id', id)
-        .single();
+        if (fornecedor) {
+            cotacao.respostas.push({
+                contactId,
+                mensagem,
+                hora: new Date()
+            });
 
-      if (error && error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Produto não encontrado.' });
-      }
-
-      if (error) throw error;
-
-      res.status(200).json(data);
-
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+            return res.json({ recebido: true });
+        }
     }
-  },
 
-  async createProduto(req, res) {
-    try {
-      const { fornecedor_id, nome, codigo_interno, preco, unidade, prazo_entrega, observacoes } = req.body;
-
-      if (!nome || !fornecedor_id || preco === undefined) {
-        return res.status(400).json({ error: 'Nome, fornecedor e preço são obrigatórios.' });
-      }
-
-      if (preco < 0) {
-        return res.status(400).json({ error: 'Preço não pode ser negativo.' });
-      }
-
-      const { data, error } = await supabase
-        .from('produtos')
-        .insert([{ fornecedor_id, nome, codigo_interno, preco, unidade, prazo_entrega, observacoes }])
-        .select();
-
-      if (error) throw error;
-      res.status(201).json(data[0]);
-
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async updateProduto(req, res) {
-    try {
-      const { id } = req.params;
-      const { fornecedor_id, nome, codigo_interno, preco, unidade, prazo_entrega, observacoes } = req.body;
-
-      if (!nome || !fornecedor_id || preco === undefined) {
-        return res.status(400).json({ error: 'Nome, fornecedor e preço são obrigatórios.' });
-      }
-
-      if (preco < 0) {
-        return res.status(400).json({ error: 'Preço não pode ser negativo.' });
-      }
-
-      const { data, error } = await supabase
-        .from('produtos')
-        .update({ fornecedor_id, nome, codigo_interno, preco, unidade, prazo_entrega, observacoes })
-        .eq('id', id)
-        .select();
-
-      if (error) throw error;
-      if (data.length === 0) {
-        return res.status(404).json({ error: 'Produto não encontrado.' });
-      }
-
-      res.status(200).json(data[0]);
-
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async deleteProduto(req, res) {
-    try {
-      const { id } = req.params;
-
-      const { error, count } = await supabase
-        .from('produtos')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      if (count === 0) {
-        return res.status(404).json({ error: 'Produto não encontrado.' });
-      }
-
-      res.status(204).send();
-
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  }
+    return res.json({ ignorado: true }); // mensagem de fora das cotações
 };
-
-module.exports = produtoController;
