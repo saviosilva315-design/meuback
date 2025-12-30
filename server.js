@@ -77,6 +77,19 @@ app.post('/fornecedores', (req, res) => {
   );
 });
 
+app.put('/fornecedores/:id', (req, res) => {
+  const { nome, contato } = req.body;
+
+  db.run(
+    'UPDATE fornecedores SET nome = ?, contato = ? WHERE id = ?',
+    [nome, contato, req.params.id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ mensagem: "Fornecedor atualizado" });
+    }
+  );
+});
+
 app.delete('/fornecedores/:id', (req, res) => {
   db.run('DELETE FROM fornecedores WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
@@ -122,6 +135,19 @@ app.post('/produtos', (req, res) => {
         preco,
         fornecedorId
       });
+    }
+  );
+});
+
+app.put('/produtos/:id', (req, res) => {
+  const { nome, preco, fornecedorId } = req.body;
+
+  db.run(
+    'UPDATE produtos SET nome = ?, preco = ?, fornecedorId = ? WHERE id = ?',
+    [nome, preco, fornecedorId, req.params.id],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json({ mensagem: "Produto atualizado" });
     }
   );
 });
