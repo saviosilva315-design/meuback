@@ -49,7 +49,6 @@ db.serialize(() => {
   )`);
 });
 
-
 // ====================== FORNECEDORES ======================
 
 app.get('/fornecedores', (req, res) => {
@@ -77,26 +76,12 @@ app.post('/fornecedores', (req, res) => {
   );
 });
 
-app.put('/fornecedores/:id', (req, res) => {
-  const { nome, contato } = req.body;
-
-  db.run(
-    'UPDATE fornecedores SET nome = ?, contato = ? WHERE id = ?',
-    [nome, contato, req.params.id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ mensagem: "Fornecedor atualizado" });
-    }
-  );
-});
-
 app.delete('/fornecedores/:id', (req, res) => {
   db.run('DELETE FROM fornecedores WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ mensagem: 'Fornecedor excluído', id: req.params.id });
   });
 });
-
 
 // ====================== PRODUTOS ======================
 
@@ -139,57 +124,12 @@ app.post('/produtos', (req, res) => {
   );
 });
 
-app.put('/produtos/:id', (req, res) => {
-  const { nome, preco, fornecedorId } = req.body;
-
-  db.run(
-    'UPDATE produtos SET nome = ?, preco = ?, fornecedorId = ? WHERE id = ?',
-    [nome, preco, fornecedorId, req.params.id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ mensagem: "Produto atualizado" });
-    }
-  );
-});
-
 app.delete('/produtos/:id', (req, res) => {
   db.run('DELETE FROM produtos WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ mensagem: 'Produto excluído', id: req.params.id });
   });
 });
-
-
-// ====================== PEDIDOS ======================
-
-app.get('/pedidos', (req, res) => {
-  db.all('SELECT * FROM pedidos', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-app.post('/pedidos', (req, res) => {
-  const { titulo, descricao, status, produtoId, fornecedorId } = req.body;
-
-  db.run(
-    'INSERT INTO pedidos (titulo, descricao, status, produtoId, fornecedorId) VALUES (?, ?, ?, ?, ?)',
-    [titulo, descricao, status, produtoId, fornecedorId],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-
-      res.json({ id: this.lastID });
-    }
-  );
-});
-
-app.delete('/pedidos/:id', (req, res) => {
-  db.run('DELETE FROM pedidos WHERE id = ?', [req.params.id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ mensagem: 'Pedido excluído', id: req.params.id });
-  });
-});
-
 
 // ====================== SERVIDOR ======================
 
