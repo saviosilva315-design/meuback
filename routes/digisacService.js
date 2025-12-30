@@ -1,13 +1,23 @@
-const { createClient } = require('@supabase/supabase-js');
+const express = require("express");
+const cors = require("cors");
+const cotacaoRoutes = require("./src/routes/cotacaoRoutes");
+const webhookRoutes = require("./src/routes/webhookRoutes");
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+const app = express();
+app.use(express.json());
+app.use(cors());
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Erro: variáveis SUPABASE_URL ou SUPABASE_SERVICE_KEY não configuradas.');
-  process.exit(1);
-}
+// Rotas principais
+app.use("/cotacao", cotacaoRoutes);
+app.use("/webhook", webhookRoutes);
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Rota inicial apenas para teste
+app.get("/", (req, res) => {
+    res.send({ status: "Backend rodando com sucesso" });
+});
 
-module.exports = supabase;
+// Porta do servidor
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+    console.log("Servidor iniciado na porta " + PORT);
+});
