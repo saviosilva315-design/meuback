@@ -1,11 +1,8 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const produtoController = require('../controllers/produtoController');
+const webhookController = require("../controllers/webhookController");
 
-router.get('/', produtoController.getAllProdutos);
-router.get('/:id', produtoController.getProdutoById);
-router.post('/', produtoController.createProduto);
-router.put('/:id', produtoController.updateProduto);
-router.delete('/:id', produtoController.deleteProduto);
+// Endpoint que receberá mensagens da Digisac
+router.post("/digisac", webhookController.receberMensagem);
 
 module.exports = router;
