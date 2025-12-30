@@ -1,11 +1,11 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const fornecedorController = require('../controllers/fornecedorController');
+const cotacaoController = require("../controllers/cotacaoController");
 
-router.get('/', fornecedorController.getAllFornecedores);
-router.get('/:id', fornecedorController.getFornecedorById);
-router.post('/', fornecedorController.createFornecedor);
-router.put('/:id', fornecedorController.updateFornecedor);
-router.delete('/:id', fornecedorController.deleteFornecedor);
+// Envia cotação a fornecedores (base, sem Digisac ainda)
+router.post("/enviar", cotacaoController.enviarCotacao);
+
+// Lista status das cotações
+router.get("/status", cotacaoController.listarStatus);
 
 module.exports = router;
