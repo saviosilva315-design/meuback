@@ -20,7 +20,7 @@ const db = new sqlite3.Database('./database.db', (err) => {
 // Recriar tabelas
 db.serialize(() => {
 
-  // Tabela fornecedores (agora com CONTATO)
+  // ===== TABELA FORNECEDORES =====
   db.run(`DROP TABLE IF EXISTS fornecedores`);
   db.run(`CREATE TABLE fornecedores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +28,7 @@ db.serialize(() => {
     contato TEXT
   )`);
 
-  // Tabela produtos (agora com PREÇO)
+  // ===== TABELA PRODUTOS =====
   db.run(`DROP TABLE IF EXISTS produtos`);
   db.run(`CREATE TABLE produtos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,7 +37,7 @@ db.serialize(() => {
     fornecedorId INTEGER
   )`);
 
-  // Tabela pedidos
+  // ===== TABELA PEDIDOS =====
   db.run(`DROP TABLE IF EXISTS pedidos`);
   db.run(`CREATE TABLE pedidos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +78,7 @@ app.post('/fornecedores', (req, res) => {
 });
 
 app.delete('/fornecedores/:id', (req, res) => {
-  db.run('DELETE FROM fornecedores WHERE id = ?', [req.params.id], (err) => {
+  db.run('DELETE FROM fornecedores WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ mensagem: 'Fornecedor excluído', id: req.params.id });
   });
@@ -114,7 +114,7 @@ app.post('/produtos', (req, res) => {
 });
 
 app.delete('/produtos/:id', (req, res) => {
-  db.run('DELETE FROM produtos WHERE id = ?', [req.params.id], (err) => {
+  db.run('DELETE FROM produtos WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ mensagem: 'Produto excluído', id: req.params.id });
   });
@@ -145,7 +145,7 @@ app.post('/pedidos', (req, res) => {
 });
 
 app.delete('/pedidos/:id', (req, res) => {
-  db.run('DELETE FROM pedidos WHERE id = ?', [req.params.id], (err) => {
+  db.run('DELETE FROM pedidos WHERE id = ?', [req.params.id], function (err) {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ mensagem: 'Pedido excluído', id: req.params.id });
   });
