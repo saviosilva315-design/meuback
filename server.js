@@ -88,10 +88,23 @@ app.delete('/fornecedores/:id', (req, res) => {
 // ====================== PRODUTOS ======================
 
 app.get('/produtos', (req, res) => {
-  db.all('SELECT * FROM produtos', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+  const fornecedorId = req.query.fornecedorId;
+
+  if (fornecedorId) {
+    db.all(
+      'SELECT * FROM produtos WHERE fornecedorId = ?',
+      [fornecedorId],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+      }
+    );
+  } else {
+    db.all('SELECT * FROM produtos', [], (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  }
 });
 
 app.post('/produtos', (req, res) => {
