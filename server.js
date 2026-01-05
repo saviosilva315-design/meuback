@@ -15,11 +15,13 @@ const db = new sqlite3.Database('./database.db', (err) => {
     console.log('Banco conectado.');
   }
 });
+
 // Recriar tabelas
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS fornecedores (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT
+    nome TEXT,
+    contato TEXT
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS produtos (
@@ -28,6 +30,7 @@ db.serialize(() => {
     fornecedorId INTEGER
   )`);
 });
+
 // ====================== FORNECEDORES ======================
 app.get('/fornecedores', (req, res) => {
   db.all('SELECT * FROM fornecedores', [], (err, rows) => {
@@ -37,8 +40,8 @@ app.get('/fornecedores', (req, res) => {
 
 app.post('/fornecedores', (req, res) => {
   db.run(
-    'INSERT INTO fornecedores (nome) VALUES (?)',
-    [req.body.nome],
+    'INSERT INTO fornecedores (nome, contato) VALUES (?, ?)',
+    [req.body.nome, req.body.contato],
     function () {
       res.json({ id: this.lastID });
     }
@@ -50,6 +53,7 @@ app.delete('/fornecedores/:id', (req, res) => {
     res.json({ mensagem: 'Fornecedor excluído', id: req.params.id });
   });
 });
+
 // ====================== PRODUTOS ======================
 app.get('/produtos', (req, res) => {
   db.all('SELECT * FROM produtos', [], (err, rows) => {
