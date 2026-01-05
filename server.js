@@ -1,110 +1,120 @@
 const express = require("express");
 const cors = require("cors");
-const Database = require("better-sqlite3");
+const sqlite3 = require("sqlite3").verbose();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// =========================
+// =======================
 // BANCO DE DADOS
-// =========================
-const db = new Database("database.db");
+// =======================
+const db = new sqlite3.Database("database.db");
 
-// Criar tabelas se não existirem
-db.exec(`
-    CREATE TABLE IF NOT EXISTS fornecedores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        contato TEXT NOT NULL
-    );
+// Criar tabelas
+db.serialize(() => {
+    db.run(`
+        CREATE TABLE IF NOT EXISTS fornecedores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            contato TEXT NOT NULL
+        )
+    `);
 
-    CREATE TABLE IF NOT EXISTS produtos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        fornecedorId INTEGER,
-        FOREIGN KEY(fornecedorId) REFERENCES fornecedores(id)
-    );
-`);
+    db.run(`
+        CREATE TABLE IF NOT EXISTS produtos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            fornecedorId INTEGER,
+            FOREIGN KEY (fornecedorId) REFERENCES fornecedores(id)
+        )
+    `);
+});
 
-// =========================
-// ROTAS FORNECEDORES
-// =========================
+// =======================
+// FORNECEDORES
+// =======================
 app.get("/fornecedores", (req, res) => {
-    const fornecedores = db.prepare("SELECT * FROM fornecedores").all();
-    res.json(fornecedores);
+    db.all("SELECT * FROM fornecedores", [], (err, rows) => {
+        res.json(rows);
+    });
 });
 
 app.post("/fornecedores", (req, res) => {
     const { nome, contato } = req.body;
 
-    const stmt = db.prepare(
-        "INSERT INTO fornecedores (nome, contato) VALUES (?, ?)"
+    db.run(
+        "INSERT INTO fornecedores (nome, contato) VALUES (?, ?)",
+        [nome, contato],
+        function () {
+            res.json({ id: this.lastID, nome, contato });
+        }
     );
-    const result = stmt.run(nome, contato);
-
-    res.json({ id: result.lastInsertRowid, nome, contato });
 });
 
 app.delete("/fornecedores/:id", (req, res) => {
     const id = req.params.id;
 
-    db.prepare("DELETE FROM produtos WHERE fornecedorId = ?").run(id);
-    db.prepare("DELETE FROM fornecedores WHERE id = ?").run(id);
-
-    res.json({ mensagem: "Fornecedor removido" });
+    db.run("DELETE FROM produtos WHERE fornecedorId = ?", [id]);
+    db.run("DELETE FROM fornecedores WHERE id = ?", [id], () => {
+        res.json({ mensagem: "Fornecedor removido" });
+    });
 });
 
-// =========================
-// ROTAS PRODUTOS
-// =========================
+// =======================
+// PRODUTOS
+// =======================
 app.get("/fornecedores/:id/produtos", (req, res) => {
     const id = req.params.id;
-    const produtos = db
-        .prepare("SELECT * FROM produtos WHERE fornecedorId = ?")
-        .all(id);
 
-    res.json(produtos);
+    db.all("SELECT * FROM produtos WHERE fornecedorId = ?", [id], (err, rows) => {
+        res.json(rows);
+    });
 });
 
 app.post("/produtos", (req, res) => {
     const { nome, fornecedorId } = req.body;
 
-    const stmt = db.prepare(
-        "INSERT INTO produtos (nome, fornecedorId) VALUES (?, ?)"
+    db.run(
+        "INSERT INTO produtos (nome, fornecedorId) VALUES (?, ?)",
+        [nome, fornecedorId],
+        function () {
+            res.json({ id: this.lastID, nome, fornecedorId });
+        }
     );
-    const result = stmt.run(nome, fornecedorId);
-
-    res.json({ id: result.lastInsertRowid, nome, fornecedorId });
 });
 
 app.delete("/produtos/:id", (req, res) => {
     const id = req.params.id;
 
-    db.prepare("DELETE FROM produtos WHERE id = ?").run(id);
-
-    res.json({ mensagem: "Produto removido" });
+    db.run("DELETE FROM produtos WHERE id = ?", [id], () => {
+        res.json({ mensagem: "Produto removido" });
+    });
 });
 
-// =========================
-// BUSCA NOVA (LISTAR TODOS OS FORNECEDORES QUE TÊM O PRODUTO)
-// =========================
+// =======================
+// BUSCA (TODOS OS FORNECEDORES QUE TÊM O PRODUTO)
+// =======================
 app.get("/buscar", (req, res) => {
-    const termo = req.query.q;
+    const termo = `%${req.query.q}%`;
 
-    const fornecedores = db.prepare(`
+    db.all(
+        `
         SELECT f.id, f.nome, f.contato, p.nome AS produto
         FROM fornecedores f
         JOIN produtos p ON p.fornecedorId = f.id
         WHERE LOWER(p.nome) LIKE LOWER(?)
-    `).all(`%${termo}%`);
-
-    res.json(fornecedores);
+        `,
+        [termo],
+        (err, rows) => {
+            res.json(rows);
+        }
+    );
 });
 
-// =========================
+// =======================
 // INICIAR SERVIDOR
-// =========================
+// =======================
 app.listen(3000, () => {
     console.log("Servidor rodando na porta 3000");
 });
