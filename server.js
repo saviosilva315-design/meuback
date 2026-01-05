@@ -1,155 +1,110 @@
 const express = require("express");
 const cors = require("cors");
-const { PrismaClient } = require("@prisma/client");
+const Database = require("better-sqlite3");
 
 const app = express();
-const prisma = new PrismaClient();
-
 app.use(cors());
 app.use(express.json());
 
-// ===============================
-//   CRUD FORNECEDORES
-// ===============================
-app.get("/fornecedores", async (req, res) => {
-    try {
-        const fornecedores = await prisma.fornecedor.findMany();
-        res.json(fornecedores);
-    } catch (error) {
-        res.status(500).json({ erro: error.message });
-    }
+// =========================
+// BANCO DE DADOS
+// =========================
+const db = new Database("database.db");
+
+// Criar tabelas se não existirem
+db.exec(`
+    CREATE TABLE IF NOT EXISTS fornecedores (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        contato TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS produtos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        fornecedorId INTEGER,
+        FOREIGN KEY(fornecedorId) REFERENCES fornecedores(id)
+    );
+`);
+
+// =========================
+// ROTAS FORNECEDORES
+// =========================
+app.get("/fornecedores", (req, res) => {
+    const fornecedores = db.prepare("SELECT * FROM fornecedores").all();
+    res.json(fornecedores);
 });
 
-app.post("/fornecedores", async (req, res) => {
-    try {
-        const { nome, contato } = req.body;
+app.post("/fornecedores", (req, res) => {
+    const { nome, contato } = req.body;
 
-        const fornecedor = await prisma.fornecedor.create({
-            data: { nome, contato }
-        });
+    const stmt = db.prepare(
+        "INSERT INTO fornecedores (nome, contato) VALUES (?, ?)"
+    );
+    const result = stmt.run(nome, contato);
 
-        res.status(201).json(fornecedor);
-    } catch (error) {
-        res.status(500).json({ erro: error.message });
-    }
+    res.json({ id: result.lastInsertRowid, nome, contato });
 });
 
-app.delete("/fornecedores/:id", async (req, res) => {
-    try {
-        const id = Number(req.params.id);
+app.delete("/fornecedores/:id", (req, res) => {
+    const id = req.params.id;
 
-        await prisma.fornecedor.delete({
-            where: { id }
-        });
+    db.prepare("DELETE FROM produtos WHERE fornecedorId = ?").run(id);
+    db.prepare("DELETE FROM fornecedores WHERE id = ?").run(id);
 
-        res.json({ mensagem: "Fornecedor excluído com sucesso" });
-    } catch (error) {
-        res.status(500).json({ erro: error.message });
-    }
+    res.json({ mensagem: "Fornecedor removido" });
 });
 
+// =========================
+// ROTAS PRODUTOS
+// =========================
+app.get("/fornecedores/:id/produtos", (req, res) => {
+    const id = req.params.id;
+    const produtos = db
+        .prepare("SELECT * FROM produtos WHERE fornecedorId = ?")
+        .all(id);
 
-// ===============================
-//   CRUD PRODUTOS
-// ===============================
-app.get("/produtos", async (req, res) => {
-    try {
-        const produtos = await prisma.produto.findMany();
-        res.json(produtos);
-    } catch (error) {
-        res.status(500).json({ erro: error.message });
-    }
+    res.json(produtos);
 });
 
-app.post("/produtos", async (req, res) => {
-    try {
-        const { nome } = req.body;
+app.post("/produtos", (req, res) => {
+    const { nome, fornecedorId } = req.body;
 
-        const produto = await prisma.produto.create({
-            data: { nome }
-        });
+    const stmt = db.prepare(
+        "INSERT INTO produtos (nome, fornecedorId) VALUES (?, ?)"
+    );
+    const result = stmt.run(nome, fornecedorId);
 
-        res.status(201).json(produto);
-    } catch (error) {
-        res.status(500).json({ erro: error.message });
-    }
+    res.json({ id: result.lastInsertRowid, nome, fornecedorId });
 });
 
-app.delete("/produtos/:id", async (req, res) => {
-    try {
-        const id = Number(req.params.id);
+app.delete("/produtos/:id", (req, res) => {
+    const id = req.params.id;
 
-        await prisma.produto.delete({
-            where: { id }
-        });
+    db.prepare("DELETE FROM produtos WHERE id = ?").run(id);
 
-        res.json({ mensagem: "Produto excluído com sucesso" });
-    } catch (error) {
-        res.status(500).json({ erro: error.message });
-    }
+    res.json({ mensagem: "Produto removido" });
 });
 
+// =========================
+// BUSCA NOVA (LISTAR TODOS OS FORNECEDORES QUE TÊM O PRODUTO)
+// =========================
+app.get("/buscar", (req, res) => {
+    const termo = req.query.q;
 
-// =========================================
-//   RELAÇÃO MUITOS‑PARA‑MUITOS (CATÁLOGO)
-// =========================================
+    const fornecedores = db.prepare(`
+        SELECT f.id, f.nome, f.contato, p.nome AS produto
+        FROM fornecedores f
+        JOIN produtos p ON p.fornecedorId = f.id
+        WHERE LOWER(p.nome) LIKE LOWER(?)
+    `).all(`%${termo}%`);
 
-// Listar produtos de um fornecedor
-app.get("/fornecedores/:id/produtos", async (req, res) => {
-    try {
-        const fornecedorId = Number(req.params.id);
-
-        const dados = await prisma.fornecedor_produto.findMany({
-            where: { fornecedorId },
-            include: { produto: true }
-        });
-
-        const produtos = dados.map(d => d.produto);
-
-        res.json(produtos);
-    } catch (error) {
-        res.status(500).json({ erro: "Erro ao buscar produtos" });
-    }
+    res.json(fornecedores);
 });
 
-// Vincular produto ao fornecedor
-app.post("/fornecedores/:id/produtos", async (req, res) => {
-    try {
-        const fornecedorId = Number(req.params.id);
-        const { produtoId } = req.body;
-
-        const vinculo = await prisma.fornecedor_produto.create({
-            data: {
-                fornecedorId,
-                produtoId: Number(produtoId)
-            }
-        });
-
-        res.json(vinculo);
-    } catch (error) {
-        res.status(500).json({ erro: "Erro ao vincular produto" });
-    }
-});
-
-// Desvincular produto
-app.delete("/fornecedores/:id/produtos/:produtoId", async (req, res) => {
-    try {
-        const fornecedorId = Number(req.params.id);
-        const produtoId = Number(req.params.produtoId);
-
-        await prisma.fornecedor_produto.deleteMany({
-            where: { fornecedorId, produtoId }
-        });
-
-        res.json({ mensagem: "Produto desvinculado" });
-    } catch (error) {
-        res.status(500).json({ erro: "Erro ao desvincular produto" });
-    }
-});
-
-// ===============================
-//   INICIAR SERVIDOR
-// ===============================
+// =========================
+// INICIAR SERVIDOR
+// =========================
 app.listen(3000, () => {
     console.log("Servidor rodando na porta 3000");
 });
