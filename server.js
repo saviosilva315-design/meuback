@@ -10,10 +10,35 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// ============== WEBHOOK DIGISAC ==================
+app.post("/webhook/digisac", async (req, res) => {
+  try {
+    console.log("[DIGISAC] Webhook recebido em /webhook/digisac");
+    console.log("[DIGISAC] Headers:", {
+      "content-type": req.headers["content-type"],
+      "user-agent": req.headers["user-agent"]
+    });
+    console.log("[DIGISAC] Body:", JSON.stringify(req.body));
+
+    // Confirma recebimento para a Digisac
+    return res.sendStatus(200);
+  } catch (err) {
+    console.error("[DIGISAC] Erro ao processar webhook:", err);
+
+    // Mantém 200 para evitar re-tentativas infinitas enquanto você está validando
+    return res.sendStatus(200);
+  }
+});
+
+// (Opcional, mas recomendado) healthcheck
+app.get("/health", (req, res) => res.status(200).send("ok"));
+
 // Executar schema.sql uma vez
 (async () => {
   try {
-    const schema = fs.readFileSync(path.join(__dirname, "schema.sql")).toString();
+    const schema = fs
+      .readFileSync(path.join(__dirname, "schema.sql"))
+      .toString();
     await pool.query(schema);
     console.log("Tabelas verificadas/criadas");
   } catch (err) {
@@ -65,3 +90,4 @@ app.delete("/produtos/:id", async (req, res) => {
 
 // ============== SERVIDOR ==================
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+```__
