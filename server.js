@@ -90,4 +90,3 @@ app.delete("/produtos/:id", async (req, res) => {
 
 // ============== SERVIDOR ==================
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
-```__
