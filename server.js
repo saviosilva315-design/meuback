@@ -1,4 +1,3 @@
-```js
 const express = require("express");
 const cors = require("cors");
 const pool = require("./db");
@@ -11,7 +10,7 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// (Opcional, mas recomendado) healthcheck
+// (Recomendado) healthcheck
 app.get("/health", (req, res) => res.status(200).send("ok"));
 
 // Executar schema.sql uma vez
@@ -35,9 +34,8 @@ app.post("/webhook/digisac", async (req, res) => {
     });
     console.log("[DIGISAC] Body:", JSON.stringify(req.body));
 
-    // ✅ Pega as informações principais do webhook
-    const event = req.body?.event;
-    const data = req.body?.data;
+    const event = req.body && req.body.event ? req.body.event : null;
+    const data = req.body && req.body.data ? req.body.data : null;
 
     // Se não vier no formato esperado, só confirma recebimento e sai
     if (!event || !data) {
@@ -51,17 +49,13 @@ app.post("/webhook/digisac", async (req, res) => {
     const text = data.text || null;
     const messageTimestamp = data.timestamp || null;
 
-    // ✅ A REGRA IMPORTANTE:
-    // Salvar somente mensagens novas (created) vindas do fornecedor (isFromMe=false)
+    // ✅ Só salvar quando for mensagem NOVA (created) e VINDO DO FORNECEDOR (isFromMe=false)
     const isInboundSupplierMessage = event === "message.created" && isFromMe === false;
 
     if (isInboundSupplierMessage && messageId) {
       try {
         await pool.query(
-          `INSERT INTO digisac_webhook_messages
-            (messageId, event, isFromMe, contactId, ticketId, text, messageTimestamp, payload)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-           ON CONFLICT (messageId) DO NOTHING`,
+          "INSERT INTO digisac_webhook_messages (messageId, event, isFromMe, contactId, ticketId, text, messageTimestamp, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (messageId) DO NOTHING",
           [
             messageId,
             event,
@@ -92,7 +86,7 @@ app.post("/webhook/digisac", async (req, res) => {
   }
 });
 
-// ✅ Rota simples para você visualizar as últimas mensagens salvas
+// ✅ Rota simples para ver as últimas mensagens salvas
 app.get("/digisac/mensagens", async (req, res) => {
   try {
     const result = await pool.query(
@@ -127,24 +121,4 @@ app.delete("/fornecedores/:id", async (req, res) => {
 
 // ============== PRODUTOS ==================
 app.get("/produtos", async (req, res) => {
-  const result = await pool.query("SELECT * FROM produtos ORDER BY id ASC");
-  res.json(result.rows);
-});
-
-app.post("/produtos", async (req, res) => {
-  const { nome, fornecedorId } = req.body;
-  const result = await pool.query(
-    "INSERT INTO produtos (nome, fornecedorId) VALUES ($1, $2) RETURNING id",
-    [nome, fornecedorId]
-  );
-  res.json({ id: result.rows[0].id });
-});
-
-app.delete("/produtos/:id", async (req, res) => {
-  const { id } = req.params;
-  await pool.query("DELETE FROM produtos WHERE id = $1", [id]);
-  res.json({ mensagem: "Produto excluído", id });
-});
-
-// ============== SERVIDOR ==================
-app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+  const result
