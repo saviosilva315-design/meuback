@@ -10,10 +10,12 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// (Recomendado) healthcheck
-app.get("/health", (req, res) => res.status(200).send("ok"));
+// ✅ Healthcheck
+app.get("/health", (req, res) => {
+  return res.status(200).send("ok");
+});
 
-// Executar schema.sql uma vez
+// ✅ Executar schema.sql uma vez (cria/atualiza tabelas se não existirem)
 (async () => {
   try {
     const schema = fs.readFileSync(path.join(__dirname, "schema.sql")).toString();
@@ -49,7 +51,7 @@ app.post("/webhook/digisac", async (req, res) => {
     const text = data.text || null;
     const messageTimestamp = data.timestamp || null;
 
-    // ✅ Só salvar quando for mensagem NOVA (created) e VINDO DO FORNECEDOR (isFromMe=false)
+    // ✅ Regra: salvar somente mensagem nova vinda do fornecedor (não sua)
     const isInboundSupplierMessage = event === "message.created" && isFromMe === false;
 
     if (isInboundSupplierMessage && messageId) {
@@ -86,22 +88,22 @@ app.post("/webhook/digisac", async (req, res) => {
   }
 });
 
-// ✅ Rota simples para ver as últimas mensagens salvas
+// ✅ Ver as últimas mensagens salvas do webhook
 app.get("/digisac/mensagens", async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM digisac_webhook_messages ORDER BY id DESC LIMIT 50"
     );
-    res.json(result.rows);
+    return res.json(result.rows);
   } catch (err) {
-    res.status(500).json({ erro: "Erro ao buscar mensagens", detalhe: String(err) });
+    return res.status(500).json({ erro: "Erro ao buscar mensagens", detalhe: String(err) });
   }
 });
 
 // ============== FORNECEDORES ==================
 app.get("/fornecedores", async (req, res) => {
   const result = await pool.query("SELECT * FROM fornecedores ORDER BY id ASC");
-  res.json(result.rows);
+  return res.json(result.rows);
 });
 
 app.post("/fornecedores", async (req, res) => {
@@ -110,15 +112,35 @@ app.post("/fornecedores", async (req, res) => {
     "INSERT INTO fornecedores (nome, contato) VALUES ($1, $2) RETURNING id",
     [nome, contato]
   );
-  res.json({ id: result.rows[0].id });
+  return res.json({ id: result.rows[0].id });
 });
 
 app.delete("/fornecedores/:id", async (req, res) => {
   const { id } = req.params;
   await pool.query("DELETE FROM fornecedores WHERE id = $1", [id]);
-  res.json({ mensagem: "Fornecedor excluído", id });
+  return res.json({ mensagem: "Fornecedor excluído", id });
 });
 
 // ============== PRODUTOS ==================
 app.get("/produtos", async (req, res) => {
-  const result
+  const result = await pool.query("SELECT * FROM produtos ORDER BY id ASC");
+  return res.json(result.rows);
+});
+
+app.post("/produtos", async (req, res) => {
+  const { nome, fornecedorId } = req.body;
+  const result = await pool.query(
+    "INSERT INTO produtos (nome, fornecedorId) VALUES ($1, $2) RETURNING id",
+    [nome, fornecedorId]
+  );
+  return res.json({ id: result.rows[0].id });
+});
+
+app.delete("/produtos/:id", async (req, res) => {
+  const { id } = req.params;
+  await pool.query("DELETE FROM produtos WHERE id = $1", [id]);
+  return res.json({ mensagem: "Produto excluído", id });
+});
+
+// ============== SERVIDOR ==================
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
