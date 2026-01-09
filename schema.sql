@@ -24,3 +24,17 @@ CREATE TABLE IF NOT EXISTS cotacao_fornecedores (
   status TEXT,
   resposta TEXT
 );
+
+-- ✅ NOVO: histórico do webhook da Digisac (para não perder mensagens)
+CREATE TABLE IF NOT EXISTS digisac_webhook_messages (
+  id SERIAL PRIMARY KEY,
+  messageId TEXT UNIQUE,
+  event TEXT,
+  isFromMe BOOLEAN,
+  contactId TEXT,
+  ticketId TEXT,
+  text TEXT,
+  messageTimestamp TEXT,
+  receivedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  payload TEXT
+);
