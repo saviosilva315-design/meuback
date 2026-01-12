@@ -11,15 +11,31 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// ===================== BUILD STAMP (para provar que o deploy atualizou) =====================
+const BUILD_STAMP = `build_${new Date().toISOString()}`;
+// Render normalmente injeta variáveis assim (se não existir, fica vazio)
+const RENDER_GIT_COMMIT = process.env.RENDER_GIT_COMMIT || "";
+const RENDER_SERVICE_ID = process.env.RENDER_SERVICE_ID || "";
+
 // ===================== DIGISAC (ENV NO RENDER) =====================
-// Ex.: DIGISAC_URL=https://bendiconstrutora.digisac.me
 const DIGISAC_URL = process.env.DIGISAC_URL || "";
 const DIGISAC_TOKEN = process.env.DIGISAC_TOKEN || "";
-// Ex.: d67e4312-dcb3-4442-bab3-124207cd35de
 const DIGISAC_SERVICE_ID = process.env.DIGISAC_SERVICE_ID || "";
 
 // ✅ Healthcheck
-app.get("/health", (req, res) => res.status(200).send("ok"));
+app.get("/health", (req, res) => {
+  return res.status(200).send("ok");
+});
+
+// ✅ Build info (serve para confirmar que o deploy pegou)
+app.get("/build", (req, res) => {
+  return res.json({
+    ok: true,
+    buildStamp: BUILD_STAMP,
+    renderGitCommit: RENDER_GIT_COMMIT,
+    renderServiceId: RENDER_SERVICE_ID
+  });
+});
 
 // ✅ Executar schema.sql uma vez (cria/atualiza tabelas se não existirem)
 (async () => {
@@ -32,23 +48,22 @@ app.get("/health", (req, res) => res.status(200).send("ok"));
   }
 })();
 
-// ===================== FUNÇÃO: NORMALIZAR TELEFONE =====================
+// ===================== FUNÇÕES UTILITÁRIAS =====================
 function normalizarTelefone(telefone) {
-  // Mantém só dígitos (remove +, espaço, hífen, parênteses)
   return String(telefone || "").replace(/\D/g, "").trim();
 }
 
 // ===================== FUNÇÃO: ENVIAR MENSAGEM DIGISAC (POR NÚMERO) =====================
-// Baseado no teste que funcionou no seu PowerShell:
-// { text, type:"chat", serviceId:"...", number:"5535...", origin:"bot" }
+// Com base no seu PowerShell que funcionou:
+// POST /api/v1/messages com { text, type:"chat", serviceId, number, origin:"bot" }
 async function enviarMensagemDigisacPorNumero({ number, text, origin = "bot" }) {
   if (!DIGISAC_URL) throw new Error("Falta DIGISAC_URL no Render (Environment).");
   if (!DIGISAC_TOKEN) throw new Error("Falta DIGISAC_TOKEN no Render (Environment).");
   if (!DIGISAC_SERVICE_ID) throw new Error("Falta DIGISAC_SERVICE_ID no Render (Environment).");
 
   const num = normalizarTelefone(number);
-  if (!num) throw new Error("Telefone inválido (number).");
-  if (!text) throw new Error("text é obrigatório para enviar mensagem.");
+  if (!num) throw new Error("Telefone inválido (number). Use somente dígitos com DDI+DDD+número.");
+  if (!text) throw new Error("mensagem/text é obrigatório.");
 
   const body = {
     text,
@@ -98,7 +113,6 @@ app.post("/webhook/digisac", async (req, res) => {
           "INSERT INTO digisac_webhook_messages (messageId, event, isFromMe, contactId, ticketId, text, messageTimestamp, payload) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (messageId) DO NOTHING",
           [messageId, event, isFromMe, contactId, ticketId, text, messageTimestamp, JSON.stringify(req.body)]
         );
-
         console.log("[DIGISAC] Mensagem do fornecedor salva no banco:", { messageId, contactId, ticketId, text });
       } catch (dbErr) {
         console.error("[DIGISAC] Erro ao salvar mensagem no banco:", dbErr);
@@ -112,6 +126,7 @@ app.post("/webhook/digisac", async (req, res) => {
   }
 });
 
+// ✅ Ver as últimas mensagens salvas do webhook
 app.get("/digisac/mensagens", async (req, res) => {
   try {
     const result = await pool.query("SELECT * FROM digisac_webhook_messages ORDER BY id DESC LIMIT 50");
@@ -163,9 +178,9 @@ app.delete("/produtos/:id", async (req, res) => {
   return res.json({ mensagem: "Produto excluído", id });
 });
 
-// ===================== ENVIO (TESTE E BOTÃO) =====================
+// ===================== ROTAS DE ENVIO =====================
 
-// ✅ TESTE: enviar para 1 número (pra você validar rapidamente)
+// ✅ Teste: enviar para 1 número
 app.post("/digisac/teste-numero", async (req, res) => {
   try {
     const number = normalizarTelefone(req.body.number);
@@ -183,8 +198,7 @@ app.post("/digisac/teste-numero", async (req, res) => {
   }
 });
 
-// ✅ BOTÃO: frontend manda fornecedorIds (os que estão na tela) + mensagem
-// O backend pega o telefone em fornecedores.contato e envia para cada um.
+// ✅ Botão: enviar para lista de fornecedores (IDs) usando fornecedores.contato como telefone
 app.post("/digisac/enviar-para-fornecedores", async (req, res) => {
   try {
     const mensagem = String(req.body.mensagem || "").trim();
@@ -204,19 +218,13 @@ app.post("/digisac/enviar-para-fornecedores", async (req, res) => {
     const resultados = [];
     for (const f of q.rows) {
       const numero = normalizarTelefone(f.contato);
-
       if (!numero) {
         resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: false, erro: "Fornecedor sem telefone válido no campo contato" });
         continue;
       }
 
       try {
-        await enviarMensagemDigisacPorNumero({
-          number: numero,
-          text: mensagem,
-          origin: "bot"
-        });
-
+        await enviarMensagemDigisacPorNumero({ number: numero, text: mensagem, origin: "bot" });
         resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: true });
       } catch (e) {
         resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: false, erro: String(e.message || e) });
@@ -226,8 +234,8 @@ app.post("/digisac/enviar-para-fornecedores", async (req, res) => {
     return res.json({
       ok: true,
       total: resultados.length,
-      enviados: resultados.filter((r) => r.ok).length,
-      falharam: resultados.filter((r) => !r.ok).length,
+      enviados: resultados.filter(r => r.ok).length,
+      falharam: resultados.filter(r => !r.ok).length,
       resultados
     });
   } catch (e) {
