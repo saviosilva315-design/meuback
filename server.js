@@ -57,7 +57,7 @@ app.get("/build", (req, res) => {
   });
 });
 
-// ✅ Lista rotas (para nunca mais “misteriosamente 404”)
+// ✅ Lista rotas (para diagnosticar 404)
 app.get("/debug/routes", (req, res) => {
   const routes = [];
   app._router.stack.forEach((m) => {
@@ -101,16 +101,27 @@ app.post("/fornecedores", async (req, res) => {
   }
 });
 
+// ✅ ATUALIZADO: exclui fornecedor MESMO se tiver produtos (apaga produtos primeiro)
 app.delete("/fornecedores/:id", async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!id) return res.status(400).json({ ok: false, erro: "id inválido" });
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ ok: false, erro: "id inválido" });
 
+  try {
+    await pool.query("BEGIN");
+
+    // 1) apaga produtos ligados ao fornecedor
+    await pool.query("DELETE FROM produtos WHERE fornecedorId = $1", [id]);
+
+    // 2) apaga o fornecedor
     await pool.query("DELETE FROM fornecedores WHERE id = $1", [id]);
+
+    await pool.query("COMMIT");
+
     return res.json({ ok: true });
   } catch (err) {
+    try { await pool.query("ROLLBACK"); } catch (e) {}
     console.error("ERRO DELETE /fornecedores/:id:", err);
-    return res.status(500).json({ ok: false, erro: "Falha ao excluir fornecedor" });
+    return res.status(500).json({ ok: false, erro: "Falha ao excluir fornecedor e seus produtos" });
   }
 });
 
@@ -162,56 +173,10 @@ app.delete("/produtos/:id", async (req, res) => {
 });
 
 // ===============================
-// DIGISAC - ENVIOS (NOVO)
+// DIGISAC - ENVIOS
 // ===============================
 
-// ✅ Botão individual do card
-app.post("/digisac/send-fornecedor", async (req, res) => {
-  try {
-    const missing = assertDigisacEnv();
-    if (missing.length) return res.status(500).json({ ok: false, erro: `Faltam variáveis: ${missing.join(", ")}` });
-
-    const fornecedorId = Number(req.body.fornecedorId);
-    const text = String(req.body.text || "").trim();
-
-    if (!fornecedorId) return res.status(400).json({ ok: false, erro: "fornecedorId é obrigatório" });
-    if (!text) return res.status(400).json({ ok: false, erro: "text é obrigatório" });
-
-    const r = await pool.query("SELECT id, nome, contato FROM fornecedores WHERE id=$1", [fornecedorId]);
-    if (r.rows.length === 0) return res.status(404).json({ ok: false, erro: "Fornecedor não encontrado" });
-
-    const fornecedor = r.rows[0];
-    const number = onlyDigits(fornecedor.contato);
-
-    if (!number) {
-      return res.status(400).json({ ok: false, erro: "Contato do fornecedor inválido. Use DDI+DDD+número (somente dígitos)." });
-    }
-
-    const body = {
-      text,
-      type: "chat",
-      serviceId: DIGISAC_SERVICE_ID,
-      number,
-      origin: "bot"
-    };
-
-    const resp = await axios.post(`${DIGISAC_URL}/api/v1/messages`, body, {
-      headers: {
-        Authorization: `Bearer ${DIGISAC_TOKEN}`,
-        "Content-Type": "application/json"
-      }
-    });
-
-    return res.json({ ok: true, fornecedorId, fornecedorNome: fornecedor.nome, resposta: resp.data });
-  } catch (err) {
-    const status = err?.response?.status || null;
-    const data = err?.response?.data || null;
-    console.error("ERRO /digisac/send-fornecedor:", status, data || err);
-    return res.status(500).json({ ok: false, erro: "Falha ao enviar via Digisac", detalheStatus: status, detalhe: data || String(err.message || err) });
-  }
-});
-
-// ✅ Botão em massa (lista de IDs deduplicada)
+// ✅ Envio em massa (para todos os fornecedores retornados na busca)
 app.post("/digisac/send-many", async (req, res) => {
   try {
     const missing = assertDigisacEnv();
@@ -250,7 +215,8 @@ app.post("/digisac/send-many", async (req, res) => {
         });
         resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: true });
       } catch (e) {
-        resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: false, erro: "Falha no envio" });
+        const status = e?.response?.status || null;
+        resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: false, erro: `Falha no envio${status ? ` (status ${status})` : ""}` });
       }
     }
 
@@ -267,7 +233,7 @@ app.post("/digisac/send-many", async (req, res) => {
   }
 });
 
-// ✅ Webhook Digisac (opcional, por enquanto só loga)
+// ✅ Webhook Digisac (por enquanto só loga)
 app.post("/webhook/digisac", (req, res) => {
   console.log("[DIGISAC] Webhook recebido:", JSON.stringify(req.body));
   return res.sendStatus(200);
