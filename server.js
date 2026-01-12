@@ -10,6 +10,7 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // para formulário HTML
 
 // ===================== DIGISAC (ENV NO RENDER) =====================
 const DIGISAC_URL = process.env.DIGISAC_URL || "";
@@ -21,7 +22,7 @@ app.get("/health", (req, res) => {
   return res.status(200).send("ok");
 });
 
-// ✅ Executar schema.sql uma vez (cria/atualiza tabelas se não existirem)
+// ✅ Executar schema.sql uma vez
 (async () => {
   try {
     const schema = fs.readFileSync(path.join(__dirname, "schema.sql")).toString();
@@ -33,13 +34,15 @@ app.get("/health", (req, res) => {
 })();
 
 // ===================== FUNÇÃO: ENVIAR MENSAGEM DIGISAC =====================
-// Doc: POST {{URL}}/api/v1/messages | Authorization Bearer | body: text,type,contactId,userId,origin,dontOpenTicket
+// POST {{URL}}/api/v1/messages
+// Authorization: Bearer {{token}}
+// Body: { text, type:"chat", contactId, userId, origin:"bot", dontOpenTicket:"true" }
 async function enviarMensagemDigisac({ contactId, text, dontOpenTicket = true }) {
   if (!DIGISAC_URL) throw new Error("Falta DIGISAC_URL no Render (Environment).");
   if (!DIGISAC_TOKEN) throw new Error("Falta DIGISAC_TOKEN no Render (Environment).");
   if (!DIGISAC_USER_ID) throw new Error("Falta DIGISAC_USER_ID no Render (Environment).");
-  if (!contactId) throw new Error("contactId é obrigatório.");
-  if (!text) throw new Error("text é obrigatório.");
+  if (!contactId) throw new Error("contactId é obrigatório para enviar mensagem.");
+  if (!text) throw new Error("text é obrigatório para enviar mensagem.");
 
   const body = {
     text,
@@ -60,6 +63,32 @@ async function enviarMensagemDigisac({ contactId, text, dontOpenTicket = true })
 
   return r.data;
 }
+
+// ===================== ✅ PÁGINA DE TESTE (SEM CONSOLE) =====================
+app.get("/digisac/teste-telefone", async (req, res) => {
+  const msg = String(req.query.msg || "");
+  const html = `<!doctype html><html lang="pt-br"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Teste Digisac por Telefone</title><style>body{font-family:Arial,Helvetica,sans-serif;max-width:760px;margin:24px auto;padding:0 16px}h1{font-size:20px}label{display:block;margin-top:14px;font-weight:600}input,textarea{width:100%;padding:10px;margin-top:6px}button{margin-top:16px;padding:10px 14px;cursor:pointer}.msg{margin:10px 0;padding:10px;border-radius:6px;background:#f3f7ff;border:1px solid #cfe0ff}code{background:#f4f4f4;padding:2px 6px;border-radius:4px}</style></head><body><h1>Teste de envio Digisac usando TELEFONE como contactId</h1>${msg ? `<div class="msg">${msg}</div>` : ""}<form method="POST" action="/digisac/teste-telefone"><label>Telefone (somente dígitos, com DDI+DDD+Número)</label><input name="telefone" placeholder="Ex: 5514995241168" required /><label>Mensagem</label><textarea name="mensagem" rows="4" required>Teste de envio pelo sistema</textarea><label><input type="checkbox" name="dontOpenTicket" checked /> Não abrir chamado (dontOpenTicket)</label><button type="submit">Enviar teste</button></form><p>Exemplo do técnico: <code>5514995241168</code>. Seu número: <code>5535988005763</code>.</p></body></html>`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  return res.status(200).send(html);
+});
+
+app.post("/digisac/teste-telefone", async (req, res) => {
+  try {
+    const telefone = String(req.body.telefone || "").replace(/\D/g, "").trim();
+    const mensagem = String(req.body.mensagem || "").trim();
+    const dontOpenTicket = req.body.dontOpenTicket ? true : false;
+
+    const resposta = await enviarMensagemDigisac({
+      contactId: telefone,
+      text: mensagem,
+      dontOpenTicket,
+    });
+
+    return res.redirect("/digisac/teste-telefone?msg=" + encodeURIComponent("OK: mensagem enviada. Resposta: " + JSON.stringify(resposta)));
+  } catch (e) {
+    return res.redirect("/digisac/teste-telefone?msg=" + encodeURIComponent("ERRO: " + String(e.message || e)));
+  }
+});
 
 // ===================== WEBHOOK DIGISAC =====================
 app.post("/webhook/digisac", async (req, res) => {
@@ -100,13 +129,6 @@ app.post("/webhook/digisac", async (req, res) => {
             JSON.stringify(req.body),
           ]
         );
-
-        console.log("[DIGISAC] Mensagem do fornecedor salva no banco:", {
-          messageId,
-          contactId,
-          ticketId,
-          text,
-        });
       } catch (dbErr) {
         console.error("[DIGISAC] Erro ao salvar mensagem no banco:", dbErr);
       }
@@ -121,143 +143,10 @@ app.post("/webhook/digisac", async (req, res) => {
 
 app.get("/digisac/mensagens", async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM digisac_webhook_messages ORDER BY id DESC LIMIT 50"
-    );
+    const result = await pool.query("SELECT * FROM digisac_webhook_messages ORDER BY id DESC LIMIT 50");
     return res.json(result.rows);
   } catch (err) {
     return res.status(500).json({ erro: "Erro ao buscar mensagens", detalhe: String(err) });
-  }
-});
-
-// ===================== FORNECEDORES =====================
-app.get("/fornecedores", async (req, res) => {
-  const result = await pool.query("SELECT * FROM fornecedores ORDER BY id ASC");
-  return res.json(result.rows);
-});
-
-app.post("/fornecedores", async (req, res) => {
-  const { nome, contato } = req.body;
-  const result = await pool.query(
-    "INSERT INTO fornecedores (nome, contato) VALUES ($1, $2) RETURNING id",
-    [nome, contato]
-  );
-  return res.json({ id: result.rows[0].id });
-});
-
-app.delete("/fornecedores/:id", async (req, res) => {
-  const { id } = req.params;
-  await pool.query("DELETE FROM fornecedores WHERE id = $1", [id]);
-  return res.json({ mensagem: "Fornecedor excluído", id });
-});
-
-// ✅ Vincular contactId manualmente (se você já tiver o contactId)
-app.put("/fornecedores/:id/digisac-contact", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const digisacContactId = String(req.body.digisacContactId || "").trim();
-
-    if (!digisacContactId) {
-      return res.status(400).json({ ok: false, erro: "Envie digisacContactId no body" });
-    }
-
-    await pool.query("UPDATE fornecedores SET digisacContactId = $1 WHERE id = $2", [
-      digisacContactId,
-      id,
-    ]);
-
-    return res.json({ ok: true, fornecedorId: id, digisacContactId });
-  } catch (err) {
-    return res.status(500).json({ ok: false, erro: String(err) });
-  }
-});
-
-// ===================== PRODUTOS =====================
-app.get("/produtos", async (req, res) => {
-  const result = await pool.query("SELECT * FROM produtos ORDER BY id ASC");
-  return res.json(result.rows);
-});
-
-app.post("/produtos", async (req, res) => {
-  const { nome, fornecedorId } = req.body;
-  const result = await pool.query(
-    "INSERT INTO produtos (nome, fornecedorId) VALUES ($1, $2) RETURNING id",
-    [nome, fornecedorId]
-  );
-  return res.json({ id: result.rows[0].id });
-});
-
-app.delete("/produtos/:id", async (req, res) => {
-  const { id } = req.params;
-  await pool.query("DELETE FROM produtos WHERE id = $1", [id]);
-  return res.json({ mensagem: "Produto excluído", id });
-});
-
-// ===================== ENVIO (TESTE E BOTÃO) =====================
-
-// ✅ TESTE: enviar para 1 contactId (para repetir o teste que já funcionou antes)
-app.post("/digisac/teste", async (req, res) => {
-  try {
-    const contactId = String(req.body.contactId || "").trim();
-    const mensagem = String(req.body.mensagem || "").trim();
-    const dontOpenTicket = req.body.dontOpenTicket !== false;
-
-    const resposta = await enviarMensagemDigisac({
-      contactId,
-      text: mensagem,
-      dontOpenTicket,
-    });
-
-    return res.json({ ok: true, resposta });
-  } catch (e) {
-    return res.status(500).json({ ok: false, erro: String(e.message || e) });
-  }
-});
-
-// ✅ BOTÃO: frontend manda fornecedorIds (os que estão na tela) + mensagem
-app.post("/digisac/enviar-para-fornecedores", async (req, res) => {
-  try {
-    const mensagem = String(req.body.mensagem || "").trim();
-    const fornecedorIds = Array.isArray(req.body.fornecedorIds) ? req.body.fornecedorIds : [];
-    const dontOpenTicket = req.body.dontOpenTicket !== false;
-
-    if (!mensagem) return res.status(400).json({ ok: false, erro: "Envie mensagem no body" });
-    if (!fornecedorIds.length) return res.status(400).json({ ok: false, erro: "Envie fornecedorIds[] no body" });
-
-    const idsInteiros = fornecedorIds.map((x) => Number(x)).filter((n) => Number.isInteger(n));
-    if (!idsInteiros.length) return res.status(400).json({ ok: false, erro: "fornecedorIds deve conter números inteiros" });
-
-    const q = await pool.query(
-      "SELECT id, nome, digisacContactId FROM fornecedores WHERE id = ANY($1::int[]) ORDER BY id ASC",
-      [idsInteiros]
-    );
-
-    const resultados = [];
-    for (const f of q.rows) {
-      const digisacContactId = f.digisaccontactid;
-
-      if (!digisacContactId) {
-        resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: false, erro: "Fornecedor sem digisacContactId vinculado" });
-        continue;
-      }
-
-      try {
-        await enviarMensagemDigisac({ contactId: digisacContactId, text: mensagem, dontOpenTicket });
-        resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: true });
-      } catch (e) {
-        resultados.push({ fornecedorId: f.id, fornecedorNome: f.nome, ok: false, erro: String(e.message || e) });
-      }
-    }
-
-    return res.json({
-      ok: true,
-      total: resultados.length,
-      enviados: resultados.filter((r) => r.ok).length,
-      falharam: resultados.filter((r) => !r.ok).length,
-      resultados,
-    });
-  } catch (e) {
-    return res.status(500).json({ ok: false, erro: String(e.message || e) });
   }
 });
 
