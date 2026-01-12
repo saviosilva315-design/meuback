@@ -4,9 +4,6 @@ CREATE TABLE IF NOT EXISTS fornecedores (
   contato TEXT
 );
 
-ALTER TABLE fornecedores
-ADD COLUMN IF NOT EXISTS digisacContactId TEXT;
-
 CREATE TABLE IF NOT EXISTS produtos (
   id SERIAL PRIMARY KEY,
   nome TEXT NOT NULL,
